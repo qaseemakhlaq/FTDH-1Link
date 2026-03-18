@@ -276,7 +276,14 @@ class Pythonhandler():
         return html_body
 
 
-
+    def adjust_time(self, time_str):
+        # Input format
+        dt = datetime.strptime(time_str, "%d-%m-%Y %H:%M")
+        # 1 minute forward
+        next_min = dt + timedelta(minutes=1)
+        # 1 minute backward
+        prev_min = dt - timedelta(minutes=1)
+        return prev_min.strftime("%d-%m-%Y %H:%M"), next_min.strftime("%d-%m-%Y %H:%M")
 
     def convert_to_24hr_format(self, time_str: str) -> str:
         if not time_str:
@@ -343,9 +350,12 @@ class Pythonhandler():
             # Convert DataFrame to list of dicts
             # return df.to_dict(orient="records")
             # df = df_to_dict(df_list)
-            df_sorted = df_list.sort_values(by="Log Date", ascending=True)
+            try:
+                df_sorted = df_list.sort_values(by="Log Date", ascending=True)
+            except:
+                df_sorted = df_list[::-1].reset_index(drop=True)
             # print(df_sorted)
-            pending_df = df_list[df_list["Status"] == "pending"]
+            # pending_df = df_list[df_list["Status"] == "pending"]
             data_table = df_sorted.to_dict(orient="records")
             # print(data_table)
             return data_table
@@ -388,3 +398,39 @@ class Pythonhandler():
         
         except ValueError as e:
             raise ValueError(f"Invalid date format: {e}")
+
+    def validate_and_return_branchless_account(self, account_number):
+        """
+        Checks if account belongs to Branchless system.
+        
+        Conditions:
+        1. Account number is exactly like 11 or 12 digits starting from 03 or 92.
+        2. IBAN where 13th and 14th digits are '9' and '2'.
+        """
+
+        account_number = account_number.strip()
+
+        # Condition 1: 11 digit account number
+        # Mobile 03 format
+        if re.fullmatch(r"03\d{9}", account_number):
+            return account_number
+
+        # Mobile 92 format
+        if re.fullmatch(r"92\d{10}", account_number):
+            return account_number
+        # IBAN match for branchless
+        if len(account_number) >= 14 and account_number[12] == "9" and account_number[13] == "2":
+            # Find 92 + exactly 10 digits
+            match = re.search(r"92\d{10}", account_number)
+            if match:
+                return match.group()
+        return False
+
+    def time_calculation_for_safe_exit(self, logment_time_str):
+        lodgement_time = datetime.strptime(logment_time_str, "%d-%m-%Y %H:%M")
+        x_time= lodgement_time + timedelta(minutes=15)
+        current_time=datetime.now()
+        remaining_time= (x_time-current_time).total_seconds() / 60
+        if remaining_time<0:
+            return 0
+        return int(remaining_time)

@@ -10,6 +10,18 @@ Library    String
 
 
 *** Keywords ***
+Validation for cps login
+    [Arguments]     ${CPS_Username}    ${CPS_Password}
+    Reload Page
+    Run Keyword And Return Status    Wait Until Page Contains Element     (//ul/li/span[contains(text(), 'Search')])[1]    8s
+    ${CPS_already_login}=   Does Page Contain Element     (//ul/li/span[contains(text(), 'Search')])[1]
+    IF   '${CPS_already_login}'=='False'
+        Wait Until Keyword Succeeds    3x    2s    Login CPS Portal    ${CPS_Username}    ${CPS_Password}
+    ELSE
+            Log    CPS is already loggedIn
+    END
+    
+
 Login CPS Portal
     [Arguments]    ${CPS_Username}    ${CPS_Password}
     Go To    ${CPS_URL}
@@ -141,6 +153,28 @@ Coverion of amount to Integer
     ${amount}    Convert To Integer   ${amount}
     [Return]    ${amount}
 
+Lien mark the amount in CPS
+    [Arguments]    ${Fraudlent_TID}
+    Unselect Frame
+    Select Frame    //iframe[contains (@id, "managecustomer")]
+    Click Element When Visible    //a[contains (text(), 'Info')]
+    Select Frame    //iframe[@id="operatorConfigIframe"]
+    Click Element When Visible    //*[contains (text(), 'Raise Dispute')]
+    Input Text When Element Is Visible    //div[contains (text(), 'Receipt No.')]/../div/div/div/input    ${Fraudlent_TID}
+    # Click Element When Visible  //div[contains (text(), 'Receipt No.')]/..//div[contains (text(), 'Search')]
+    Select From List By Label    //div[contains (text(), 'Reason')]/..//select      Others
+    Input Text When Element Is Visible    //div[contains (text(), 'Remark')]/..//textarea    FTDH
+    Click Element When Visible    //div[contains (text(), 'Submit')]
+    Unselect Frame
+    Wait Until Page Contains Element    //div[contains (text(), 'Are you sure to submit')]
+    Click Element When Visible    //div[contains (text(), 'Yes')]
+    Unselect Frame
+    Run Keyword And Return Status    Wait Until Page Contains Element    //iframe[contains (@id, "managecustomer")]
+    Select Frame    //iframe[contains (@id, "managecustomer")]
+    Select Frame    //iframe[@id="operatorConfigIframe"]
+    Run Keyword And Return Status    Wait Until Page Contains Element    //div[contains (text(), 'The request must be approved by another operator.')]    8s
+    ${Lien_Mark_Status}=    Does Page Contain Element    //div[contains (text(), 'The request must be approved by another operator.')]
+    [Return]    ${Lien_Mark_Status}
 
 Update KYC Info Of Customer
     ${Block_Success}=   Set Variable      False
@@ -306,7 +340,9 @@ Identifiy the Amount in CPS
     Unselect Frame
 
 Valdate Transaction In CPS
-    Attach Chrome Browser    9223
+    [Arguments]    ${TRX_Date_1Link}    ${TRX_Time}    ${TRX Amount}
+    ${Fraudlent_TID}=    Set Variable    None
+    Unselect Frame
     Select Frame    //iframe[contains (@id, "managecustomer")]
     Click Element    //a[contains(text(),'Review Transaction')]
     Select Frame    //iframe[@id="operatorConfigIframe"]
@@ -316,48 +352,52 @@ Valdate Transaction In CPS
     Select From List By Index    //div[contains(text(),'Account Type')]/../div/div/div/select    1
     Wait Until Page Contains Element    (//tbody/tr[@class="bc_block_row even"]/td//table/tbody/tr/td)[6]
     ${available_amount}=    Autosphere.Browser.Selenium.Get Text    (//tbody/tr[@class="bc_block_row even"]/td//table/tbody/tr/td)[6]
-    # ${available_amount}=    Coverion of amount to Integer     ${available_amount}
+    ${available_amount}=    Coverion of amount to Integer     ${available_amount}
     click Element    (//div[@title="Select Date"])[1]
     # ${Transaction_Date}=    Convert Date     17-Dec-2025   result_format=%d-%m-%Y
-    ${Transaction_Date}=    Convert Date    17-Dec-2025    date_format=%d-%b-%Y    result_format=%d-%m-%Y
-    ${Previous_Date_Transaction}    ${Next_Seven_Date_Transaction}=    Get Previous And Next    17-Dec-2025
+    ${Transaction_Date}=    Convert Date    ${TRX_Date_1Link}    date_format=%d-%b-%Y    result_format=%d-%m-%Y
+    ${Previous_Date_Transaction}    ${Next_Seven_Date_Transaction}=    Get Previous And Next    ${TRX_Date_1Link}
     ${split_fraud_date}=    Split String    ${Previous_Date_Transaction}    -
-    Select From List By Label    //select[@class="datetimepicker_newMonth"]       ${split_fraud_date}[1]
+    ${From_Month}=    Convert To Integer    ${split_fraud_date}[1]
+    Select From List By Label    //select[@class="datetimepicker_newMonth"]       ${From_Month}
     Select From List By Label    //select[@class="datetimepicker_newYear"]      ${split_fraud_date}[2]
     Click Element When Visible    //td[@title="${Transaction_Date}"]
     Click Element When Visible    //div[contains(text(),'OK')]
     Click Element When Visible    (//div[@title="Select Date"])[2]
     ${Splitted_To_Date}  Split String  ${Next_Seven_Date_Transaction}  -
-    Select From List By Label    //select[@class="datetimepicker_newMonth"]       ${Splitted_To_Date}[1]
+    ${To_Month}=    Convert To Integer    ${Splitted_To_Date}[1]
+    Select From List By Label    //select[@class="datetimepicker_newMonth"]       ${To_Month}
     Select From List By Label    //select[@class="datetimepicker_newYear"]      ${Splitted_To_Date}[2]
     Click Element When Visible    //td[@title="${Next_Seven_Date_Transaction}"]
     Click Element When Visible       //div[contains(text(),'OK')]
     Wait Until Page Contains Element    (//label[contains(text(),'Both')]/ancestor::div//input[@type="radio"])[1]    20s
     Click Element When Visible    (//label[contains(text(),'Both')]/ancestor::div//input[@type="radio"])[1]
     Click Element When Visible    //span[@id="aeSigleSearch"]/div/div[contains(text(),'Search')]
-    Sleep    4s
-    Wait Until Element Is Enabled    //span[@id="aeSigleSearch"]/div/div[contains(text(),'Search')]    20s
+    # Sleep    4s
+    ${Transaction_Time}=    convert_to_24hr_format    ${TRX_Time}
+    ${Transaction_Date_Time}=    Catenate    ${Transaction_Date}   ${Transaction_Time}
+    ${Transaction_Date_Time_Prv_Min}    ${Transaction_Date_Time_Next_Min}=    Adjust Time    ${Transaction_Date_Time}
+    sleep    2s
+    Wait Until Page Does Not Contain Element    //div[contains(text(), 'Query Progress')]    20s
+    Wait Until Element Is Enabled    //span[@id="aeSigleSearch"]/div/div[contains(text(),'Search')]    60s
+    Scroll Element Into View    //span[contains(text(), 'records')]/parent::*//following-sibling::select[@id="dgLogs_0_page_recordPerPage"]
     Select From List By Label    //span[contains(text(), 'records')]/parent::*//following-sibling::select[@id="dgLogs_0_page_recordPerPage"]    100
     ${page_count}=      Autosphere.Browser.Selenium.Get Text    ((//span[@class="pcontrol"])[2]/span)[2]
-    Run Keyword And Return Status    Wait Until Page Contains Element    //td[contains(text(),'PKR32.00')]/../td/label[ contains(text(),'17-12-2025 12:57') or contains(text(),'17-12-2025 12:58') or contains(text(),'17-12-2025 12:59')]
-    ${Transation_Exists}=    Does Page Contain Element    //td[contains(text(),'PKR32.00')]/../td/label[ contains(text(),'17-12-2025 12:57') or contains(text(),'17-12-2025 12:58') or contains(text(),'17-12-2025 12:59')]
+    Run Keyword And Return Status    Wait Until Page Contains Element    //td[contains(text(),'PKR${TRX Amount}')]/../td/label[ contains(text(),'${Transaction_Date_Time_Prv_Min}') or contains(text(),'${Transaction_Date_Time}') or contains(text(),'${Transaction_Date_Time_Next_Min}')]
+    ${Transation_Exists}=    Does Page Contain Element    //td[contains(text(),'PKR${TRX Amount}')]/../td/label[ contains(text(),'${Transaction_Date_Time_Prv_Min}') or contains(text(),'${Transaction_Date_Time}') or contains(text(),'${Transaction_Date_Time_Next_Min}')]
+    # sleep    200s
     FOR    ${page}    IN RANGE    1    ${page_count}+1
         Log    ${page}
         Log    Add variable of transaction number
-        Run Keyword And Return Status    Wait Until Page Contains Element    //td[contains(text(),'PKR32.00')]/../td/label[ contains(text(),'17-12-2025 12:57') or contains(text(),'17-12-2025 12:58') or contains(text(),'17-12-2025 12:59')]
-        ${Transation_Exists}=    Does Page Contain Element    //td[contains(text(),'PKR32.00')]/../td/label[ contains(text(),'17-12-2025 12:57') or contains(text(),'17-12-2025 12:58') or contains(text(),'17-12-2025 12:59')]
+        Run Keyword And Return Status    Wait Until Page Contains Element    //td[contains(text(),'PKR${TRX Amount}')]/../td/label[ contains(text(),'${Transaction_Date_Time_Prv_Min}') or contains(text(),'${Transaction_Date_Time}') or contains(text(),'${Transaction_Date_Time_Next_Min}')]
+        ${Transation_Exists}=    Does Page Contain Element    //td[contains(text(),'PKR${TRX Amount}')]/../td/label[ contains(text(),'${Transaction_Date_Time_Prv_Min}') or contains(text(),'${Transaction_Date_Time}') or contains(text(),'${Transaction_Date_Time_Next_Min}')]
         IF    ${Transation_Exists}
             Log  transaction exists
+            ${Fraudlent_TID}=    Get Text    (//td[contains(text(),'PKR${TRX Amount}')]/../td/label[ contains(text(),'${Transaction_Date_Time_Prv_Min}') or contains(text(),'${Transaction_Date_Time}') or contains(text(),'${Transaction_Date_Time_Next_Min}')]/../../td)[1]
             Exit For Loop
         ELSE
             Log   continue to other pages
             Click Element When Visible    (//div[@class="pGroupnext"]/div[@title="Next"])[3]
         END
     END
-
-*** Tasks ***
-Test Takstsss
-    # ${time}=    Convert To 24hr Format    125819
-    # ${transation_datetime}=    Set Variable    17-Dec-25 ${time}
-    # Identifiy the Amount in CPS    ${transation_datetime}    32
-    Valdate Transaction In CPS
+    [Return]    ${Transation_Exists}    ${available_amount}    ${Fraudlent_TID}

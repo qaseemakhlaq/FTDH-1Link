@@ -60,6 +60,6 @@ class captcha_handling():
 
 
 a = captcha_handling()
-file_path = "C:\\Users\\MuhammadHassaanPAM\\Documents\\workspace\\Jazz Service Desk\\Captcha.png"
+file_path = "C:\\Users\\MuhammadHassaanPAM\\Documents\\workspace\\One Link Code\\OneLinkCaptcha.png"
 text = a.get_captcha_text(file_path)
 print(text)
