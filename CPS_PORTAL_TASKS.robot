@@ -102,6 +102,10 @@ Get Account Status
     # Sleep    4s
     # Wait Until Page Contains Element    //iframe[contains (@id, "managecustomer")]    20s
     # Select Frame    //iframe[contains (@id, "managecustomer")]
+    # Select Frame    //iframe[contains (@id, "managecustomer")]
+    Unselect Frame
+    Select Frame    //iframe[contains (@id, "managecustomer")]
+    Click Element When Visible    //a[contains (text(), 'Info')]
     Select Frame    //iframe[@id="operatorConfigIframe"]
     Wait Until Element Is Visible    //div[contains(text(),'Identity Status')]/../div/label    20s
     ${account_status}=      Autosphere.Browser.Selenium.Get Text      //div[contains(text(),'Identity Status')]/../div/label
@@ -122,7 +126,8 @@ Authrization Steps on CPS
     FOR    ${Record}    IN RANGE    ${Bot_Records}
         Log    ${Record}
         # Click Element When Visible    //td[contains(text(),'Phantom')]/../td[contains(text(), '${MISDN_Number}')]/..//input[@type="checkbox"]
-        Click Element When Visible    //td[contains(text(),'Phantom')]/..//input[@type="checkbox"]
+        Click Element When Visible    (//td[contains(text(),'Phantom')]/..//input[@type="checkbox"])[1]
+        Exit For Loop
     END
     Click Element When Visible  //cite[contains(text(), 'Process')]/../img
     Unselect Frame
@@ -142,6 +147,7 @@ Authrization Steps on CPS
         Set To Dictionary    ${Ticket_Dict}      Authorization Complete=Authorization Completed Succesfully
     END
     Click Element When Visible    //*[contains(text(), 'Return')]
+    [Return]    ${Authorization_Status}
     
 Coverion of amount to Integer
     [Arguments]    ${amount}
@@ -193,7 +199,7 @@ Update KYC Info Of Customer
     Click Element When Visible    //*[contains (text(), 'KYC information of')]/..//div[@title='Edit']/div/img
     Wait Until Element Is Not Visible    //*[contains (text(), 'KYC information of')]/..//div[@title='Edit']    20s
     Scroll Element Into View    //div[contains (text(), 'Suspension Reason')]/../div//input
-    Input Text When Element Is Visible    //div[contains (text(), 'Suspension Reason')]/../div//input       ${Ticket_ID}
+    Input Text When Element Is Visible    //div[contains (text(), 'Suspension Reason')]/../div//input       ${Ticket_Dict}[Dispute ID]
     ${current_date}   Get Current Date   result_format=%d-%m-%Y
     ${current_date1}=    Replace String Using Regexp    ${current_date}    -0    -
     ${current_date1}=    Replace String Using Regexp    ${current_date1}    ^0    ${EMPTY}
@@ -371,7 +377,8 @@ Valdate Transaction In CPS
     Click Element When Visible    //td[@title="${Next_Seven_Date_Transaction}"]
     Click Element When Visible       //div[contains(text(),'OK')]
     Wait Until Page Contains Element    (//label[contains(text(),'Both')]/ancestor::div//input[@type="radio"])[1]    20s
-    Click Element When Visible    (//label[contains(text(),'Both')]/ancestor::div//input[@type="radio"])[1]
+    # Click Element When Visible    (//label[contains(text(),'Both')]/ancestor::div//input[@type="radio"])[1]
+    Click Element When Visible    //tr[@class="bc_block_row even"]//label[contains (text(), 'Credit') and @title="Credit"]/../input
     Click Element When Visible    //span[@id="aeSigleSearch"]/div/div[contains(text(),'Search')]
     # Sleep    4s
     ${Transaction_Time}=    convert_to_24hr_format    ${TRX_Time}
@@ -382,11 +389,16 @@ Valdate Transaction In CPS
     Wait Until Element Is Enabled    //span[@id="aeSigleSearch"]/div/div[contains(text(),'Search')]    60s
     Scroll Element Into View    //span[contains(text(), 'records')]/parent::*//following-sibling::select[@id="dgLogs_0_page_recordPerPage"]
     Select From List By Label    //span[contains(text(), 'records')]/parent::*//following-sibling::select[@id="dgLogs_0_page_recordPerPage"]    100
+    sleep    4s
     ${page_count}=      Autosphere.Browser.Selenium.Get Text    ((//span[@class="pcontrol"])[2]/span)[2]
     Run Keyword And Return Status    Wait Until Page Contains Element    //td[contains(text(),'PKR${TRX Amount}')]/../td/label[ contains(text(),'${Transaction_Date_Time_Prv_Min}') or contains(text(),'${Transaction_Date_Time}') or contains(text(),'${Transaction_Date_Time_Next_Min}')]
     ${Transation_Exists}=    Does Page Contain Element    //td[contains(text(),'PKR${TRX Amount}')]/../td/label[ contains(text(),'${Transaction_Date_Time_Prv_Min}') or contains(text(),'${Transaction_Date_Time}') or contains(text(),'${Transaction_Date_Time_Next_Min}')]
     # sleep    200s
-    FOR    ${page}    IN RANGE    1    ${page_count}+1
+    IF    ${Transation_Exists}
+            Log  transaction exists
+            ${Fraudlent_TID}=    Get Text    (//td[contains(text(),'PKR${TRX Amount}')]/../td/label[ contains(text(),'${Transaction_Date_Time_Prv_Min}') or contains(text(),'${Transaction_Date_Time}') or contains(text(),'${Transaction_Date_Time_Next_Min}')]/../../td)[1]
+    END
+    FOR    ${page}    IN RANGE    1    ${page_count}
         Log    ${page}
         Log    Add variable of transaction number
         Run Keyword And Return Status    Wait Until Page Contains Element    //td[contains(text(),'PKR${TRX Amount}')]/../td/label[ contains(text(),'${Transaction_Date_Time_Prv_Min}') or contains(text(),'${Transaction_Date_Time}') or contains(text(),'${Transaction_Date_Time_Next_Min}')]

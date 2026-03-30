@@ -336,15 +336,52 @@ class Pythonhandler():
 
     def html_to_datatable(self, html_string):
         """
+        Returns:
+            pending_df  -> only Pending records
+            other_df    -> excluding Pending & Invalid
+        """
+        try:
+            df = pd.read_html(StringIO(html_string))[0]
+            df = df.astype(str)
+            df['Trx Time'] = df['Trx Time'].str.replace('.0', '', regex=False)
+            df['Stan/Transaction ID'] = df['Stan/Transaction ID'].str.replace('.0', '', regex=False)
+
+            # Sorting
+            try:
+                df = df.sort_values(by="Log Date", ascending=True)
+            except:
+                df = df[::-1].reset_index(drop=True)
+
+            pending_df = df[df["Status"] == "Pending"]
+            # pending_df = df[df["Status"] == "Acknowledged"]
+
+            other_df = df[~df["Status"].isin(["Pending", "Invalid"])]
+
+            print("Pending DF:")
+            print(pending_df)
+
+            print("Other DF:")
+            print(other_df)
+
+            return pending_df, other_df
+
+        except Exception as e:
+            print("Error parsing HTML:", e)
+            return pd.DataFrame(), pd.DataFrame()
+
+    def test_html_to_datatable(self, html_string):
+        """
         Takes HTML string containing table
         Returns pandas DataFrame
         """
         try:
             # Read HTML table
             df_list = pd.read_html(StringIO(html_string))[0]
-            # df_list = df_list[0]
-            # df_list = df_list.astype(str)
-            df_list['Beneficiary A/C #']=df_list['Beneficiary A/C #'].astype(str).str.zfill(11)
+            df_list = df_list.astype(str)
+            df_list['Trx Time']=df_list['Trx Time'].astype(str).str.replace('.0', '', regex=False)
+            print(df_list['Trx Time'])
+
+            # df_list['Beneficiary A/C #']=df_list['Beneficiary A/C #'].astype(str).str.zfill(11)
             # Agar multiple tables hon to pehla return karega
             # df = df_list[0]
             # Convert DataFrame to list of dicts
@@ -354,15 +391,43 @@ class Pythonhandler():
                 df_sorted = df_list.sort_values(by="Log Date", ascending=True)
             except:
                 df_sorted = df_list[::-1].reset_index(drop=True)
-            # print(df_sorted)
-            # pending_df = df_list[df_list["Status"] == "pending"]
-            data_table = df_sorted.to_dict(orient="records")
-            # print(data_table)
-            return data_table
+            # pending_df = df_list[df_list["Status"] == "Pending"]
+            pending_df = df_list[df_list["Status"] == "Acknowledged"]
+            # data_table = pending_df.to_dict(orient="records")
+            print(pending_df)
+            return pending_df
 
         except Exception as e:
             print("Error parsing HTML:", e)
             return None
+
+
+    def merge_datatables(self, existing_df, new_data):
+        try:
+            if existing_df is None:
+                print("I am here")
+                merged_dt = new_data
+            else:
+                print("In else statement")
+                merged_dt = pd.concat([existing_df, new_data], ignore_index=True)
+            return merged_dt
+
+        except Exception as e:
+            print("Error joining tables:", e)
+            return existing_df
+        
+    def sort_dt_convert_to_dict(self, combined_dt):
+        try:
+            df_sorted = combined_dt.sort_values(by="Log Date", ascending=True)
+        except Exception:
+            df_sorted = combined_dt.iloc[::-1].reset_index(drop=True)
+        # df_sorted['Beneficiary A/C #']=df_sorted['Beneficiary A/C #'].astype(int)
+        # df_sorted['Beneficiary A/C #']=df_sorted['Beneficiary A/C #'].astype(str).str.zfill(11)
+        df_sorted['Beneficiary A/C #'] = (df_sorted['Beneficiary A/C #'].astype(str).str.replace('.0', '', regex=False).str.zfill(11))
+        df_sorted['Trx Time'] = (df_sorted['Trx Time'].astype(str).str.replace('.0', '', regex=False).str.zfill(6))
+        
+        data_dict = df_sorted.to_dict(orient="records")
+        return data_dict
 
     def extract_otp(self, email_body: str):
         """
@@ -434,3 +499,40 @@ class Pythonhandler():
         if remaining_time<0:
             return 0
         return int(remaining_time)
+
+
+    def get_status_dispute_id_for_duplicate(self, df, date_value, stan_id, beneficiary_number):
+        """
+        Filters DataFrame by date (ignoring time), stan_id, and beneficiary_number.
+        Returns Dispute ID if match found, else False.
+        """
+
+        if df is None or df.empty:
+            return False
+
+        # Convert 'Log Date' safely and remove time
+        df['Log Date'] = pd.to_datetime(df['Log Date'], errors='coerce').dt.strftime('%d-%b-%y')
+        date_value = pd.to_datetime(date_value, errors='coerce').strftime('%d-%b-%y')
+        # df['Log Date'] = pd.to_datetime( df['Log Date'], errors='coerce').dt.date
+
+        # # Convert input date_value safely and remove time
+        # date_value = pd.to_datetime( date_value, errors='coerce' ).date()
+
+        # Remove invalid date rows
+        df = df.dropna(subset=['Log Date'])
+
+        # Apply filters
+        df_match = df[
+            (df['Log Date'] == date_value) &
+            (df['Stan/Transaction ID'] == stan_id) &
+            (df['Beneficiary A/C #'] == beneficiary_number)
+        ]
+
+        if not df_match.empty:
+            status = df_match.iloc[0]['Status']
+            dispute_id = df_match.iloc[0]['Dispute ID']
+
+            print(status)   # optional debug
+            return dispute_id
+
+        return False
